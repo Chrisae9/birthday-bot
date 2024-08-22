@@ -3,7 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 from dotenv import load_dotenv
 
@@ -124,31 +124,29 @@ class BirthdayGroup(app_commands.Group):
             return
 
         now = datetime.now(pytz.timezone('US/Eastern'))
-        upcoming_birthdays = sorted(
-            servers_data[server_id]["birthdays"].items(), 
-            key=lambda item: ((item[1]['month'], item[1]['day']) >= (now.month, now.day), item[1]['month'], item[1]['day'])
-        )[:5]
+        upcoming_birthdays = []
 
-        if not upcoming_birthdays:
-            embed = create_embed(
-                title="No Upcoming Birthdays",
-                description="No upcoming birthdays found."
-            )
-        else:
-            description = ""
-            for user_id, bday in upcoming_birthdays:
-                user = await bot.fetch_user(int(user_id))
-                bday_date = datetime(year=now.year, month=bday['month'], day=bday['day'])
-                bday_date = now.tzinfo.localize(bday_date)  # Make bday_date timezone-aware
-                if bday_date < now:
-                    bday_date = bday_date.replace(year=now.year + 1)
-                days_until = (bday_date - now).days
-                description += f"{user.mention}: {bday['month']}/{bday['day']}/{bday['year']} (in {days_until} days)\n"
+        for user_id, bday in servers_data[server_id]["birthdays"].items():
+            bday_date = datetime(year=now.year, month=bday['month'], day=bday['day'])
+            bday_date = now.tzinfo.localize(bday_date)  # Make bday_date timezone-aware
+            if bday_date < now:
+                bday_date = bday_date.replace(year=now.year + 1)
+            days_until = (bday_date - now).days
+            upcoming_birthdays.append((user_id, bday_date, days_until))
 
-            embed = create_embed(
-                title="Upcoming Birthdays",
-                description=description
-            )
+        # Sort birthdays by the number of days until they occur
+        upcoming_birthdays.sort(key=lambda x: x[2])
+
+        # Prepare the embed description with the closest 5 birthdays
+        description = ""
+        for user_id, bday_date, days_until in upcoming_birthdays[:5]:
+            user = await bot.fetch_user(int(user_id))
+            description += f"{user.mention}: {bday_date.month}/{bday_date.day}/{bday_date.year} (in {days_until} days)\n"
+
+        embed = create_embed(
+            title="Upcoming Birthdays",
+            description=description
+        )
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
