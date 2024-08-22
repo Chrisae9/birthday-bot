@@ -8,4 +8,5 @@ services:
       - .envrc
     volumes:
       - ./birthdays.json:/app/birthdays.json  # Mount the JSON file for persistent data
+      - ./bot.log:/app/bot.log  # Mount the log file for persistent logging
     command: python bot.py
