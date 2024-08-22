@@ -52,7 +52,7 @@ class BirthdayGroup(app_commands.Group):
         super().__init__(name="bday", description="Manage birthdays")
 
     @app_commands.command(name="remember", description="Remember a user's birthday")
-    async def remember_birthday(self, interaction: discord.Interaction, month: int, day: int, user: discord.Member = None):
+    async def remember_birthday(self, interaction: discord.Interaction, month: int, day: int, year: int = None, user: discord.Member = None):
         user = user or interaction.user
         server_id = str(interaction.guild.id)
 
@@ -62,13 +62,15 @@ class BirthdayGroup(app_commands.Group):
         servers_data[server_id]["birthdays"][str(user.id)] = {
             'month': month,
             'day': day,
+            'year': year,
             'username': str(user)
         }
         save_data()
 
+        year_text = f"/{year}" if year else ""
         embed = create_embed(
             title="Birthday Remembered",
-            description=f"Birthday for {user.mention} remembered: {month}/{day}."
+            description=f"Birthday for {user.mention} remembered: {month}/{day}{year_text}."
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -98,9 +100,10 @@ class BirthdayGroup(app_commands.Group):
 
         if server_id in servers_data and str(user.id) in servers_data[server_id]["birthdays"]:
             bday = servers_data[server_id]["birthdays"][str(user.id)]
+            year_text = f"/{bday['year']}" if bday.get('year') else ""
             embed = create_embed(
                 title="Birthday Check",
-                description=f"{user.mention}'s birthday is {bday['month']}/{bday['day']}."
+                description=f"{user.mention}'s birthday is {bday['month']}/{bday['day']}{year_text}."
             )
         else:
             embed = create_embed(

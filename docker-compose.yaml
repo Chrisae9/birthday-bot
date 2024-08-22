@@ -1,5 +1,6 @@
 services:
   birthday-bot:
+    container_name: birthday-bot
     image: birthday-bot
     build: .
     restart: always
