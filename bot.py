@@ -1,11 +1,24 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 import os
 import json
 from datetime import datetime, timedelta
 import pytz
+import logging
 from dotenv import load_dotenv
+
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler("bot.log"),
+        logging.StreamHandler()  # This will print to the console
+    ]
+)
 
 # Load environment variables from .envrc file
 load_dotenv()
@@ -25,6 +38,9 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 
 # Data storage
 servers_data = {}
+
+# Scheduler setup
+scheduler = AsyncIOScheduler()
 
 # Load data from JSON file
 def load_data():
@@ -73,6 +89,7 @@ class BirthdayGroup(app_commands.Group):
             description=f"Birthday for {user.mention} remembered: {month}/{day}{year_text}."
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
+        logging.info(f"{interaction.user} used /bday remember with parameters: month={month}, day={day}, year={year}, user={user}")
 
     @app_commands.command(name="forget", description="Forget a user's birthday")
     async def forget_birthday(self, interaction: discord.Interaction, user: discord.Member = None):
@@ -93,6 +110,7 @@ class BirthdayGroup(app_commands.Group):
             )
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
+        logging.info(f"{interaction.user} used /bday forget with parameters: user={user}")
 
     @app_commands.command(name="check", description="Check a user's birthday")
     async def check_birthday(self, interaction: discord.Interaction, user: discord.Member):
@@ -112,6 +130,7 @@ class BirthdayGroup(app_commands.Group):
             )
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
+        logging.info(f"{interaction.user} used /bday check with parameters: user={user}")
 
     @app_commands.command(name="upcoming", description="List the upcoming birthdays")
     async def upcoming_birthdays(self, interaction: discord.Interaction):
@@ -151,6 +170,7 @@ class BirthdayGroup(app_commands.Group):
         )
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
+        logging.info(f"{interaction.user} used /bday upcoming")
 
     @app_commands.command(name="channel", description="Set the birthday announcement channel")
     async def set_birthday_channel(self, interaction: discord.Interaction, channel: discord.TextChannel = None):
@@ -169,6 +189,7 @@ class BirthdayGroup(app_commands.Group):
         save_data()
         embed = create_embed(title="Channel Set", description=description)
         await interaction.response.send_message(embed=embed, ephemeral=True)
+        logging.info(f"{interaction.user} used /bday channel with parameters: channel={channel}")
 
     @app_commands.command(name="send", description="Send a happy birthday message on demand")
     async def send_birthday_message(self, interaction: discord.Interaction, user: discord.Member):
@@ -195,6 +216,32 @@ class BirthdayGroup(app_commands.Group):
             )
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
+        logging.info(f"{interaction.user} used /bday send with parameters: user={user}")
+        logging.info(f"Birthday message sent for user {user.mention}")
+
+# Function to send birthday messages
+async def send_birthday_messages():
+    now = datetime.now(pytz.timezone('US/Eastern'))
+    today = (now.month, now.day)
+
+    for server_id, data in servers_data.items():
+        channel_id = data.get("channel_id")
+        if channel_id is None:
+            continue
+
+        birthday_people = [user_id for user_id, bday in data["birthdays"].items() if (bday['month'], bday['day']) == today]
+
+        if birthday_people:
+            channel = bot.get_channel(channel_id)
+            if channel:
+                for user_id in birthday_people:
+                    user = await bot.fetch_user(int(user_id))
+                    await channel.send(f"🎉🎉🎉 Happy Birthday {user.mention} 🎉🎉🎉")
+                    logging.info(f"Birthday message sent for user {user.mention}")
+
+# Schedule the birthday check at 10 AM ET daily
+scheduler.add_job(send_birthday_messages, CronTrigger(hour=10, minute=0, timezone='US/Eastern'))
+scheduler.start()
 
 # Register the command group
 birthday_group = BirthdayGroup()
