@@ -1,0 +1,10 @@
+services:
+  birthday-bot:
+    image: birthday-bot
+    build: .
+    restart: always
+    env_file: 
+      - .envrc
+    volumes:
+      - ./birthdays.json:/app/birthdays.json  # Mount the JSON file for persistent data
+    command: python bot.py

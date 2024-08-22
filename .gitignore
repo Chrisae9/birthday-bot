@@ -1,0 +1,84 @@
+# Python Bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pdb
+*.egg-info/
+
+# Virtual Environment
+env/
+venv/
+ENV/
+.venv/
+.env/
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# Distribution / Packaging
+build/
+dist/
+*.egg
+.eggs/
+*.egg-info/
+*.wheel
+
+# Django specific
+*.log
+db.sqlite3
+db.sqlite3-journal
+
+# Flask specific
+instance/
+.webassets-cache
+
+# Environment Variables
+.env
+.envrc
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Pytest
+.cache/
+
+# MyPy
+.mypy_cache/
+
+# Coverage
+htmlcov/
+.tox/
+.coverage
+*.cover
+coverage.xml
+
+# Docker
+docker-compose.override.yml
+Dockerfile
+*.dockerignore
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+# Logs and databases
+*.log
+*.sqlite
+*.sqlite3
+
+# Persistent data
+birthdays.json
