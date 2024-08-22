@@ -148,11 +148,14 @@ class BirthdayGroup(app_commands.Group):
         upcoming_birthdays = []
 
         for user_id, bday in servers_data[server_id]["birthdays"].items():
-            bday_date = datetime(year=now.year, month=bday['month'], day=bday['day'])
-            bday_date = now.tzinfo.localize(bday_date)  # Make bday_date timezone-aware
+            bday_date = datetime(year=now.year, month=bday['month'], day=bday['day'], tzinfo=now.tzinfo)
             if bday_date < now:
                 bday_date = bday_date.replace(year=now.year + 1)
-            days_until = (bday_date - now).days
+            
+            # Calculate days until the birthday, including partial days
+            days_until = (bday_date - now).total_seconds() / 86400  # 86400 seconds in a day
+            days_until = int(days_until) + (1 if days_until % 1 > 0 else 0)  # Round up if there are fractional days
+
             upcoming_birthdays.append((user_id, bday_date, days_until))
 
         # Sort birthdays by the number of days until they occur
@@ -170,7 +173,7 @@ class BirthdayGroup(app_commands.Group):
         )
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
-        logging.info(f"{interaction.user} used /bday upcoming")
+
 
     @app_commands.command(name="channel", description="Set the birthday announcement channel")
     async def set_birthday_channel(self, interaction: discord.Interaction, channel: discord.TextChannel = None):
