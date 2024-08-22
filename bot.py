@@ -165,7 +165,8 @@ class BirthdayGroup(app_commands.Group):
         description = ""
         for user_id, bday_date, days_until in upcoming_birthdays[:5]:
             user = await bot.fetch_user(int(user_id))
-            description += f"{user.mention}: {bday_date.month}/{bday_date.day} (in {days_until} days)\n"
+            day_label = "day" if days_until == 1 else "days"
+            description += f"{user.mention}: {bday_date.month}/{bday_date.day} (in {days_until} {day_label})\n"
 
         embed = create_embed(
             title="Upcoming Birthdays",
@@ -173,7 +174,6 @@ class BirthdayGroup(app_commands.Group):
         )
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
-
 
     @app_commands.command(name="channel", description="Set the birthday announcement channel")
     async def set_birthday_channel(self, interaction: discord.Interaction, channel: discord.TextChannel = None):
