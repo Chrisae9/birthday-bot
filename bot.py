@@ -52,7 +52,7 @@ class BirthdayGroup(app_commands.Group):
         super().__init__(name="bday", description="Manage birthdays")
 
     @app_commands.command(name="remember", description="Remember a user's birthday")
-    async def remember_birthday(self, interaction: discord.Interaction, month: int, day: int, year: int, user: discord.Member = None):
+    async def remember_birthday(self, interaction: discord.Interaction, month: int, day: int, user: discord.Member = None):
         user = user or interaction.user
         server_id = str(interaction.guild.id)
 
@@ -62,14 +62,13 @@ class BirthdayGroup(app_commands.Group):
         servers_data[server_id]["birthdays"][str(user.id)] = {
             'month': month,
             'day': day,
-            'year': year,
             'username': str(user)
         }
         save_data()
 
         embed = create_embed(
             title="Birthday Remembered",
-            description=f"Birthday for {user.mention} remembered: {month}/{day}/{year}."
+            description=f"Birthday for {user.mention} remembered: {month}/{day}."
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -101,7 +100,7 @@ class BirthdayGroup(app_commands.Group):
             bday = servers_data[server_id]["birthdays"][str(user.id)]
             embed = create_embed(
                 title="Birthday Check",
-                description=f"{user.mention}'s birthday is {bday['month']}/{bday['day']}/{bday['year']}."
+                description=f"{user.mention}'s birthday is {bday['month']}/{bday['day']}."
             )
         else:
             embed = create_embed(
@@ -141,7 +140,7 @@ class BirthdayGroup(app_commands.Group):
         description = ""
         for user_id, bday_date, days_until in upcoming_birthdays[:5]:
             user = await bot.fetch_user(int(user_id))
-            description += f"{user.mention}: {bday_date.month}/{bday_date.day}/{bday_date.year} (in {days_until} days)\n"
+            description += f"{user.mention}: {bday_date.month}/{bday_date.day} (in {days_until} days)\n"
 
         embed = create_embed(
             title="Upcoming Birthdays",
@@ -172,30 +171,24 @@ class BirthdayGroup(app_commands.Group):
     async def send_birthday_message(self, interaction: discord.Interaction, user: discord.Member):
         server_id = str(interaction.guild.id)
 
-        if server_id in servers_data and str(user.id) in servers_data[server_id]["birthdays"]:
-            bday_channel_id = servers_data[server_id].get("channel_id")
-            if bday_channel_id:
-                channel = bot.get_channel(bday_channel_id)
-                if channel:
-                    await channel.send(f"🎉🎉🎉 Happy Birthday {user.mention} 🎉🎉🎉")
-                    embed = create_embed(
-                        title="Birthday Message Sent",
-                        description=f"Happy Birthday message sent for {user.mention}."
-                    )
-                else:
-                    embed = create_embed(
-                        title="Error",
-                        description="Birthday channel not found."
-                    )
+        bday_channel_id = servers_data[server_id].get("channel_id")
+        if bday_channel_id:
+            channel = bot.get_channel(bday_channel_id)
+            if channel:
+                await channel.send(f"🎉🎉🎉 Happy Birthday {user.mention} 🎉🎉🎉")
+                embed = create_embed(
+                    title="Birthday Message Sent",
+                    description=f"Happy Birthday message sent for {user.mention}."
+                )
             else:
                 embed = create_embed(
                     title="Error",
-                    description="Birthday channel not set."
+                    description="Birthday channel not found."
                 )
         else:
             embed = create_embed(
-                title="Birthday Not Found",
-                description=f"No birthday found for {user.mention}."
+                title="Error",
+                description="Birthday channel not set."
             )
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
