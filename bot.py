@@ -1,8 +1,7 @@
+import asyncio
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks  # Import tasks from discord.ext
 from discord import app_commands
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
 import os
 import json
 from datetime import datetime, timedelta
@@ -38,9 +37,6 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 
 # Data storage
 servers_data = {}
-
-# Scheduler setup
-scheduler = AsyncIOScheduler()
 
 # Load data from JSON file
 def load_data():
@@ -144,18 +140,20 @@ class BirthdayGroup(app_commands.Group):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
+        # Get the current date and time in the US/Eastern timezone
         now = datetime.now(pytz.timezone('US/Eastern'))
+        today = now.date()  # Date object for today
         upcoming_birthdays = []
 
         for user_id, bday in servers_data[server_id]["birthdays"].items():
-            bday_date = datetime(year=now.year, month=bday['month'], day=bday['day'], tzinfo=now.tzinfo)
-            if bday_date < now:
+            # Calculate the next occurrence of the birthday
+            bday_date = datetime(year=now.year, month=bday['month'], day=bday['day'], tzinfo=now.tzinfo).date()
+            if bday_date < today:
                 bday_date = bday_date.replace(year=now.year + 1)
-            
-            # Calculate days until the birthday, including partial days
-            days_until = (bday_date - now).total_seconds() / 86400  # 86400 seconds in a day
-            days_until = int(days_until) + (1 if days_until % 1 > 0 else 0)  # Round up if there are fractional days
 
+            days_until = (bday_date - today).days  # Calculate the number of days until the next birthday
+
+            # Append the birthday data to the list
             upcoming_birthdays.append((user_id, bday_date, days_until))
 
         # Sort birthdays by the number of days until they occur
@@ -165,8 +163,12 @@ class BirthdayGroup(app_commands.Group):
         description = ""
         for user_id, bday_date, days_until in upcoming_birthdays[:5]:
             user = await bot.fetch_user(int(user_id))
-            day_label = "day" if days_until == 1 else "days"
-            description += f"{user.mention}: {bday_date.month}/{bday_date.day} (in {days_until} {day_label})\n"
+            if days_until == 0:
+                description += f"{user.mention}: {bday_date.month}/{bday_date.day} (today)\n"
+            elif days_until == 1:
+                description += f"{user.mention}: {bday_date.month}/{bday_date.day} (in 1 day)\n"
+            else:
+                description += f"{user.mention}: {bday_date.month}/{bday_date.day} (in {days_until} days)\n"
 
         embed = create_embed(
             title="Upcoming Birthdays",
@@ -174,6 +176,7 @@ class BirthdayGroup(app_commands.Group):
         )
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
 
     @app_commands.command(name="channel", description="Set the birthday announcement channel")
     async def set_birthday_channel(self, interaction: discord.Interaction, channel: discord.TextChannel = None):
@@ -222,30 +225,56 @@ class BirthdayGroup(app_commands.Group):
         logging.info(f"{interaction.user} used /bday send with parameters: user={user}")
         logging.info(f"Birthday message sent for user {user.mention}")
 
-# Function to send birthday messages
-async def send_birthday_messages():
-    now = datetime.now(pytz.timezone('US/Eastern'))
-    today = (now.month, now.day)
+@tasks.loop(hours=24)
+async def check_birthdays():
+    """Loop to check for birthdays at 10 AM ET daily."""
+    while True:
+        # Get the current time in the US/Eastern timezone
+        now = datetime.now(pytz.timezone('US/Eastern'))
+        logging.info(f"Current time is: {now}")
 
-    for server_id, data in servers_data.items():
-        channel_id = data.get("channel_id")
-        if channel_id is None:
-            continue
+        # Calculate the next 10 AM time
+        target_time = now.replace(hour=10, minute=0, second=0, microsecond=0)
+        logging.info(f"Initial target time for 10 AM ET is: {target_time}")
 
-        birthday_people = [user_id for user_id, bday in data["birthdays"].items() if (bday['month'], bday['day']) == today]
+        if now > target_time:
+            # If we've already passed 10 AM today, target 10 AM tomorrow
+            target_time += timedelta(days=1)
+            logging.info(f"Target time adjusted to next day: {target_time}")
 
-        if birthday_people:
-            channel = bot.get_channel(channel_id)
-            if channel:
-                for user_id in birthday_people:
-                    user = await bot.fetch_user(int(user_id))
-                    await channel.send(f"🎉🎉🎉 Happy Birthday {user.mention} 🎉🎉🎉")
-                    logging.info(f"Birthday message sent for user {user.mention}")
+        # Calculate the time difference until the next 10 AM
+        time_until_target = (target_time - now).total_seconds()
+        logging.info(f"Time until next 10 AM ET: {time_until_target} seconds")
 
-# Schedule the birthday check at 10 AM ET daily
-scheduler.add_job(send_birthday_messages, CronTrigger(hour=10, minute=0, timezone='US/Eastern'))
-scheduler.start()
+        # Sleep until 10 AM
+        logging.info(f"Sleeping until the next 10 AM ET...")
+        await asyncio.sleep(time_until_target)
 
+        # Now it's 10 AM, we can run the birthday check
+        today = (target_time.month, target_time.day)
+        logging.info(f"Checking birthdays for today: {today}")
+
+        for server_id, data in servers_data.items():
+            channel_id = data.get("channel_id")
+            if channel_id is None:
+                logging.info(f"No channel set for server {server_id}, skipping...")
+                continue
+
+            # Gather all users whose birthday is today
+            birthday_people = [user_id for user_id, bday in data["birthdays"].items() if (bday['month'], bday['day']) == today]
+
+            if birthday_people:
+                channel = bot.get_channel(channel_id)
+                if channel:
+                    birthday_mentions = ", ".join([f"<@{user_id}>" for user_id in birthday_people])
+                    await channel.send(f"🎉🎉🎉 Happy Birthday {birthday_mentions}! 🎉🎉🎉")
+                    logging.info(f"Birthday message sent for users {birthday_mentions} in server {server_id}")
+                else:
+                    logging.error(f"Channel {channel_id} not found for server {server_id}. Unable to send birthday messages.")
+            else:
+                # Log when no birthdays are found
+                logging.info(f"No birthdays found for server {server_id} today.")
+                
 # Register the command group
 birthday_group = BirthdayGroup()
 
@@ -271,8 +300,10 @@ async def on_ready():
                 print(f'ID: {command.id}')
                 print(f'Guild ID: {guild_id}')
                 print('-' * 20)
+        check_birthdays.start()  # Start the task loop
     except Exception as e:
         print(f"Failed to sync commands: {e}")
     print(f'Logged in as {bot.user} (ID: {bot.user.id})')
+
 
 bot.run(DISCORD_BOT_TOKEN)
